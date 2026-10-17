@@ -1,0 +1,4 @@
+interface:
+  display_name: "Access Pattern 分析"
+  short_description: "Model access patterns across I/O boundaries"
+  default_prompt: "Use $access-pattern-analysis to model this workload's I/O behavior and connect its evidence to the infrastructure graph."

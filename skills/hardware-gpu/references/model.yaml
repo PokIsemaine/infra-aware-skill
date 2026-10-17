@@ -1,0 +1,45 @@
+version: "0.1"
+description: Canonical entities and observations for Linux GPU-aware analysis.
+entities:
+  - type: host
+    required: [id, hostname]
+  - type: gpu
+    required: [id, vendor, model, pci_address]
+  - type: gpu_partition
+    required: [id, partition_kind, parent_gpu]
+  - type: gpu_memory
+    required: [id, parent_device, capacity_bytes]
+  - type: interconnect_endpoint
+    required: [id, endpoint_kind]
+  - type: interconnect_link
+    required: [id, source, target, link_type, provenance]
+relations:
+  - type: partition_of
+    source: gpu_partition
+    target: gpu
+  - type: attached_to
+    source: gpu
+    target: host
+  - type: peer_link
+    source: gpu|gpu_partition
+    target: gpu|gpu_partition
+    properties: [link_type, negotiated_bandwidth, access_mode]
+  - type: connected_via
+    source: gpu
+    target: interconnect_link
+observations:
+  required: [subject, metric, value, unit, timestamp, source, scope, confidence]
+  examples:
+    - metric: device_utilization
+      unit: percent
+    - metric: memory_used
+      unit: bytes
+    - metric: kernel_duration
+      unit: microseconds
+    - metric: host_to_device_bandwidth
+      unit: bytes_per_second
+    - metric: launch_gap
+      unit: microseconds
+capabilities:
+  required: [subject, name, value, unit, provenance, kind]
+  kinds: [advertised, measured, inferred]

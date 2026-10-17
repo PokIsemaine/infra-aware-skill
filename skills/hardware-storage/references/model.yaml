@@ -1,0 +1,42 @@
+version: "0.1"
+description: Canonical physical and block storage model.
+entities:
+  - type: host
+    required: [id, hostname]
+  - type: storage_media
+    required: [id, media_kind, model]
+  - type: storage_namespace
+    required: [id, parent_media, capacity_bytes]
+  - type: storage_controller
+    required: [id, controller_kind]
+  - type: block_device
+    required: [id, device_name]
+  - type: storage_path
+    required: [id, source, target, path_kind]
+relations:
+  - type: namespace_of
+    source: storage_namespace
+    target: storage_media
+  - type: controlled_by
+    source: storage_namespace|block_device
+    target: storage_controller
+  - type: attached_to
+    source: storage_controller
+    target: host
+  - type: path_via
+    source: block_device|storage_controller
+    target: storage_path
+observations:
+  required: [subject, metric, value, unit, timestamp, source, scope, confidence]
+  examples:
+    - metric: capacity
+      unit: bytes
+    - metric: negotiated_pcie_width
+      unit: lanes
+    - metric: temperature
+      unit: celsius
+    - metric: endurance_remaining
+      unit: percent
+capabilities:
+  required: [subject, name, value, unit, provenance, kind]
+  kinds: [advertised, measured, inferred]

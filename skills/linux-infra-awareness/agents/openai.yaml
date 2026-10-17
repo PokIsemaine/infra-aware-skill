@@ -1,0 +1,4 @@
+interface:
+  display_name: "Linux Infra Awareness"
+  short_description: "Gather Linux infrastructure evidence for code optimization"
+  default_prompt: "Use $linux-infra-awareness to analyze this code or workload with Linux infrastructure context, collect relevant evidence, and tie recommendations to measurable bottlenecks."

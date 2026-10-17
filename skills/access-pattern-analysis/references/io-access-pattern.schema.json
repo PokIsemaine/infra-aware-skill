@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Infra-aware I/O access pattern v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "entities", "relations", "io_access_patterns"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "entities": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "external_entity_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "relations": {"type": "array", "items": {"$ref": "#/$defs/relation"}},
+    "io_access_patterns": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/pattern"}},
+    "observations": {"type": "array", "items": {"$ref": "#/$defs/observation"}},
+    "capabilities": {"type": "array", "items": {"$ref": "#/$defs/capability"}}
+  },
+  "$defs": {
+    "id": {"type": "string", "minLength": 1},
+    "ratio": {"type": "number", "minimum": 0, "maximum": 1},
+    "nonnegative": {"type": "number", "minimum": 0},
+    "entity": {
+      "type": "object", "required": ["id", "type"],
+      "properties": {"id": {"$ref": "#/$defs/id"}, "type": {"$ref": "#/$defs/id"}},
+      "additionalProperties": true
+    },
+    "relation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "source", "type", "target"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "source": {"$ref": "#/$defs/id"},
+        "target": {"$ref": "#/$defs/id"}, "type": {"$ref": "#/$defs/id"},
+        "properties": {"type": "object"}
+      }
+    },
+    "window": {
+      "type": "object", "additionalProperties": false, "required": ["start", "end"],
+      "properties": {
+        "start": {"type": "string", "format": "date-time"},
+        "end": {"type": "string", "format": "date-time"},
+        "sampling_interval_ms": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["basis", "sources", "collected_at", "method"],
+      "properties": {
+        "basis": {"enum": ["observed", "inferred", "declared", "synthetic"]},
+        "sources": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/id"}},
+        "collected_at": {"type": "string", "format": "date-time"},
+        "method": {"type": "string", "minLength": 1},
+        "sample_fraction": {"$ref": "#/$defs/ratio"},
+        "lost_events": {"type": "integer", "minimum": 0},
+        "notes": {"type": "string"}
+      }
+    },
+    "operation": {
+      "enum": ["read", "write", "append", "flush", "discard", "metadata", "get", "put", "list", "delete", "send", "receive", "copy", "other", "unknown"]
+    },
+    "distribution": {
+      "type": "object", "additionalProperties": false, "required": ["unit", "kind"],
+      "properties": {
+        "unit": {"enum": ["bytes", "requests", "us", "ms", "unique_accesses"]},
+        "kind": {"enum": ["fixed", "percentiles", "histogram"]},
+        "sample_count": {"type": "integer", "minimum": 1},
+        "value": {"$ref": "#/$defs/nonnegative"},
+        "p50": {"$ref": "#/$defs/nonnegative"},
+        "p95": {"$ref": "#/$defs/nonnegative"},
+        "p99": {"$ref": "#/$defs/nonnegative"},
+        "bins": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["lower", "upper", "count"],
+            "properties": {
+              "lower": {"$ref": "#/$defs/nonnegative"}, "upper": {"$ref": "#/$defs/nonnegative"},
+              "count": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
+      },
+      "oneOf": [
+        {"properties": {"kind": {"const": "fixed"}}, "required": ["value"], "not": {"anyOf": [{"required": ["bins"]}, {"required": ["p50"]}, {"required": ["p95"]}, {"required": ["p99"]}]}},
+        {"properties": {"kind": {"const": "percentiles"}}, "required": ["sample_count"], "anyOf": [{"required": ["p50"]}, {"required": ["p95"]}, {"required": ["p99"]}], "not": {"anyOf": [{"required": ["value"]}, {"required": ["bins"]}]}},
+        {"properties": {"kind": {"const": "histogram"}}, "required": ["bins", "sample_count"], "not": {"anyOf": [{"required": ["value"]}, {"required": ["p50"]}, {"required": ["p95"]}, {"required": ["p99"]}]}}
+      ]
+    },
+    "pattern": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "workload_id", "phase", "actor_id", "target_id", "layer", "scope", "window", "evidence", "missing"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "workload_id": {"$ref": "#/$defs/id"},
+        "phase": {"type": "string", "minLength": 1}, "actor_id": {"$ref": "#/$defs/id"},
+        "source_id": {"$ref": "#/$defs/id"}, "target_id": {"$ref": "#/$defs/id"},
+        "path_entity_ids": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/id"}},
+        "layer": {"enum": ["application", "syscall", "filesystem", "block", "device", "object_api", "network", "gpu_transfer"]},
+        "scope": {"type": "string", "minLength": 1}, "window": {"$ref": "#/$defs/window"},
+        "evidence": {"$ref": "#/$defs/evidence"},
+        "field_evidence": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/evidence"}},
+        "missing": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "operation_mix": {
+          "type": "object", "additionalProperties": false, "required": ["basis", "fractions"],
+          "properties": {
+            "basis": {"enum": ["request_count", "bytes"]},
+            "fractions": {"type": "object", "minProperties": 1, "propertyNames": {"$ref": "#/$defs/operation"}, "additionalProperties": {"$ref": "#/$defs/ratio"}}
+          }
+        },
+        "request_size": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["operation", "distribution"],
+            "properties": {
+              "operation": {"$ref": "#/$defs/operation"},
+              "size_basis": {"enum": ["requested", "transferred", "payload", "unknown"]},
+              "distribution": {"allOf": [{"$ref": "#/$defs/distribution"}, {"properties": {"unit": {"const": "bytes"}}}]}
+            }
+          }
+        },
+        "addressing": {
+          "type": "object", "additionalProperties": false, "required": ["space", "pattern", "group_by"],
+          "properties": {
+            "space": {"enum": ["file_offset", "block_lba", "object_key", "memory_offset", "stream_position", "unknown"]},
+            "pattern": {"enum": ["sequential", "random", "strided", "mixed", "not_applicable", "unknown"]},
+            "group_by": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+            "address_unit_bytes": {"type": "integer", "minimum": 1},
+            "stride_address_units": {"type": "integer"},
+            "alignment_bytes": {"type": "integer", "minimum": 1},
+            "random_fraction": {"$ref": "#/$defs/ratio"}
+          },
+          "allOf": [
+            {"if": {"properties": {"space": {"const": "block_lba"}}}, "then": {"required": ["address_unit_bytes"]}},
+            {"if": {"properties": {"pattern": {"const": "strided"}}}, "then": {"required": ["stride_address_units"]}}
+          ]
+        },
+        "concurrency": {
+          "type": "object", "additionalProperties": false, "required": ["io_mode", "scope"],
+          "properties": {
+            "io_mode": {"enum": ["sync", "async", "mixed", "unknown"]},
+            "scope": {"type": "string", "minLength": 1},
+            "configured_depth": {"type": "integer", "minimum": 1},
+            "workers": {"type": "integer", "minimum": 1},
+            "in_flight": {"allOf": [{"$ref": "#/$defs/distribution"}, {"properties": {"unit": {"const": "requests"}}}]}
+          }
+        },
+        "arrival": {
+          "type": "object", "additionalProperties": false, "required": ["model", "shape"],
+          "properties": {
+            "model": {"enum": ["open_loop", "closed_loop", "unknown"]},
+            "shape": {"enum": ["steady", "bursty", "periodic", "unknown"]},
+            "batch_size": {"type": "integer", "minimum": 1},
+            "interarrival": {"allOf": [{"$ref": "#/$defs/distribution"}, {"properties": {"unit": {"enum": ["us", "ms"]}}}]}
+          }
+        },
+        "locality": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "working_set_bytes": {"type": "integer", "minimum": 0},
+            "hot_set_bytes": {"type": "integer", "minimum": 0},
+            "hot_set_access_fraction": {"$ref": "#/$defs/ratio"},
+            "reuse_distance": {"$ref": "#/$defs/distribution"},
+            "skew": {"enum": ["uniform", "hotspot", "zipfian", "unknown"]},
+            "method": {"type": "string", "minLength": 1}
+          },
+          "dependentRequired": {"hot_set_access_fraction": ["hot_set_bytes"], "skew": ["method"], "reuse_distance": ["method"]}
+        },
+        "semantics": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "cache_mode": {"enum": ["buffered", "direct", "mmap", "unknown"]},
+            "cache_state": {"enum": ["cold", "warm", "mixed", "unknown"]},
+            "cache_layer_id": {"$ref": "#/$defs/id"}, "cache_hit_ratio": {"$ref": "#/$defs/ratio"},
+            "flush_policy": {"type": "string", "minLength": 1},
+            "completion_boundary": {"enum": ["submitted", "api_return", "kernel_complete", "device_complete", "remote_ack", "durable_commit", "unknown"]},
+            "durability": {"enum": ["volatile", "local_persistent", "replicated_persistent", "unknown"]},
+            "ordering": {"enum": ["per_stream", "global", "unordered", "unknown"]}
+          },
+          "dependentRequired": {"cache_hit_ratio": ["cache_layer_id"]}
+        }
+      }
+    },
+    "observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["subject", "metric", "value", "unit", "aggregation", "window", "source", "scope", "confidence"],
+      "properties": {
+        "subject": {"$ref": "#/$defs/id"}, "pattern_id": {"$ref": "#/$defs/id"},
+        "metric": {"$ref": "#/$defs/id"}, "value": {"type": "number"},
+        "unit": {"$ref": "#/$defs/id"}, "aggregation": {"$ref": "#/$defs/id"},
+        "window": {"$ref": "#/$defs/window"}, "source": {"$ref": "#/$defs/id"},
+        "scope": {"$ref": "#/$defs/id"}, "confidence": {"enum": ["observed", "inferred", "hypothesized", "synthetic"]}
+      }
+    },
+    "capability": {
+      "type": "object", "additionalProperties": false,
+      "required": ["subject", "name", "value", "unit", "provenance", "kind"],
+      "properties": {
+        "subject": {"$ref": "#/$defs/id"}, "name": {"$ref": "#/$defs/id"},
+        "value": {"type": ["number", "string", "boolean"]}, "unit": {"$ref": "#/$defs/id"},
+        "provenance": {"$ref": "#/$defs/id"}, "kind": {"enum": ["advertised", "measured", "inferred"]}
+      }
+    }
+  }
+}

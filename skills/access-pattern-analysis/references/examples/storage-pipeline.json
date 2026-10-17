@@ -1,0 +1,79 @@
+{
+  "schema_version": "0.1",
+  "entities": [
+    {"id": "workload:demo", "type": "workload", "description": "Synthetic data-loader example; not a host measurement"},
+    {"id": "process:demo-host:boot-a:2184:start-100", "type": "process"},
+    {"id": "file:demo-dataset", "type": "file"},
+    {"id": "block:demo-host:namespace-demo", "type": "block_device"},
+    {"id": "memory:demo-pinned", "type": "host_memory"},
+    {"id": "gpu:demo-uuid", "type": "gpu"},
+    {"id": "gpu-memory:demo-uuid", "type": "gpu_memory", "parent_device": "gpu:demo-uuid"},
+    {"id": "objects:demo-dataset", "type": "object_collection"}
+  ],
+  "relations": [
+    {"id": "rel:file-block", "source": "file:demo-dataset", "type": "backed_by", "target": "block:demo-host:namespace-demo"},
+    {"id": "rel:gpu-memory", "source": "gpu-memory:demo-uuid", "type": "part_of", "target": "gpu:demo-uuid"},
+    {"id": "rel:read-correlation", "source": "pattern:block-read", "type": "correlated_with", "target": "pattern:application-read", "properties": {"basis": "synthetic example; no proven per-request mapping"}},
+    {"id": "rel:gpu-correlation", "source": "pattern:gpu-copy", "type": "correlated_with", "target": "pattern:application-read", "properties": {"basis": "synthetic example; preprocessing may change byte counts"}}
+  ],
+  "io_access_patterns": [
+    {
+      "id": "pattern:application-read", "workload_id": "workload:demo", "phase": "steady",
+      "actor_id": "process:demo-host:boot-a:2184:start-100", "target_id": "file:demo-dataset",
+      "path_entity_ids": ["process:demo-host:boot-a:2184:start-100", "file:demo-dataset", "block:demo-host:namespace-demo"],
+      "layer": "application", "scope": "process:demo-host:boot-a:2184:start-100",
+      "window": {"start": "2026-10-18T00:00:00Z", "end": "2026-10-18T00:01:00Z"},
+      "evidence": {"basis": "synthetic", "sources": ["fixture:app"], "collected_at": "2026-10-18T00:01:01Z", "method": "Constructed marginal distributions; not a replay trace"},
+      "operation_mix": {"basis": "request_count", "fractions": {"read": 1}},
+      "request_size": [{"operation": "read", "distribution": {"unit": "bytes", "kind": "percentiles", "sample_count": 1000, "p50": 65536, "p95": 262144, "p99": 1048576}}],
+      "addressing": {"space": "file_offset", "pattern": "sequential", "group_by": ["file_id", "stream_id"], "address_unit_bytes": 1},
+      "concurrency": {"io_mode": "sync", "scope": "all worker streams", "workers": 8, "in_flight": {"kind": "percentiles", "unit": "requests", "sample_count": 100, "p50": 4, "p95": 8, "p99": 8}},
+      "arrival": {"model": "closed_loop", "shape": "bursty"},
+      "semantics": {"cache_mode": "buffered", "cache_state": "mixed", "completion_boundary": "api_return", "durability": "unknown"},
+      "missing": ["cache hit ratio", "file extent to LBA mapping", "per-request cross-layer correlation"]
+    },
+    {
+      "id": "pattern:block-read", "workload_id": "workload:demo", "phase": "steady",
+      "actor_id": "process:demo-host:boot-a:2184:start-100", "target_id": "block:demo-host:namespace-demo",
+      "layer": "block", "scope": "block:demo-host:namespace-demo",
+      "window": {"start": "2026-10-18T00:00:00Z", "end": "2026-10-18T00:01:00Z"},
+      "evidence": {"basis": "synthetic", "sources": ["fixture:block"], "collected_at": "2026-10-18T00:01:01Z", "method": "Constructed issue/complete samples for the same workload"},
+      "operation_mix": {"basis": "request_count", "fractions": {"read": 1}},
+      "request_size": [{"operation": "read", "distribution": {"unit": "bytes", "kind": "histogram", "sample_count": 500, "bins": [{"lower": 4096, "upper": 131072, "count": 300}, {"lower": 131072, "upper": 524288, "count": 200}]}}],
+      "addressing": {"space": "block_lba", "pattern": "mixed", "group_by": ["device_id"], "address_unit_bytes": 512},
+      "concurrency": {"io_mode": "unknown", "scope": "device issue-to-complete", "in_flight": {"kind": "percentiles", "unit": "requests", "sample_count": 100, "p50": 12, "p95": 24, "p99": 32}},
+      "missing": ["random fraction", "controller queue occupancy", "hardware service time isolated from queueing"]
+    },
+    {
+      "id": "pattern:gpu-copy", "workload_id": "workload:demo", "phase": "steady",
+      "actor_id": "process:demo-host:boot-a:2184:start-100", "source_id": "memory:demo-pinned", "target_id": "gpu-memory:demo-uuid",
+      "path_entity_ids": ["memory:demo-pinned", "gpu-memory:demo-uuid"],
+      "layer": "gpu_transfer", "scope": "runtime stream:demo-0",
+      "window": {"start": "2026-10-18T00:00:00Z", "end": "2026-10-18T00:01:00Z"},
+      "evidence": {"basis": "synthetic", "sources": ["fixture:runtime-copy"], "collected_at": "2026-10-18T00:01:01Z", "method": "Constructed host-to-device copy records; not GPU kernel memory accesses"},
+      "operation_mix": {"basis": "bytes", "fractions": {"copy": 1}},
+      "request_size": [{"operation": "copy", "distribution": {"unit": "bytes", "kind": "fixed", "value": 4194304}}],
+      "concurrency": {"io_mode": "async", "scope": "stream:demo-0"},
+      "semantics": {"completion_boundary": "device_complete", "ordering": "per_stream"},
+      "missing": ["measured copy-engine concurrency", "PCIe path", "compute/copy overlap"]
+    },
+    {
+      "id": "pattern:object-get", "workload_id": "workload:demo", "phase": "prefetch",
+      "actor_id": "process:demo-host:boot-a:2184:start-100", "target_id": "objects:demo-dataset",
+      "layer": "object_api", "scope": "client object requests",
+      "window": {"start": "2026-10-17T23:59:00Z", "end": "2026-10-18T00:00:00Z"},
+      "evidence": {"basis": "synthetic", "sources": ["fixture:object-client"], "collected_at": "2026-10-18T00:01:01Z", "method": "Constructed full-object GET samples with uniform key selection"},
+      "operation_mix": {"basis": "request_count", "fractions": {"get": 1}},
+      "request_size": [{"operation": "get", "distribution": {"kind": "fixed", "unit": "bytes", "value": 1048576}}],
+      "addressing": {"space": "object_key", "pattern": "not_applicable", "group_by": ["collection_id"]},
+      "locality": {"skew": "uniform", "method": "Synthetic uniform key-selection fixture; no linear offset assumption"},
+      "arrival": {"model": "closed_loop", "shape": "steady"},
+      "semantics": {"completion_boundary": "api_return"},
+      "missing": ["server cache state", "object service physical backing", "retry amplification"]
+    }
+  ],
+  "observations": [
+    {"subject": "file:demo-dataset", "pattern_id": "pattern:application-read", "metric": "completion_latency", "value": 1500, "unit": "us", "aggregation": "p95", "window": {"start": "2026-10-18T00:00:00Z", "end": "2026-10-18T00:01:00Z"}, "source": "fixture:app", "scope": "application read calls", "confidence": "synthetic"}
+  ],
+  "capabilities": []
+}

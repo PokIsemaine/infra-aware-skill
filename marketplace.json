@@ -1,0 +1,17 @@
+{
+  "name": "infra-aware",
+  "owner": {
+    "name": "infra-aware-skill"
+  },
+  "metadata": {
+    "description": "Infrastructure-aware skills for Linux-centered code analysis and optimization."
+  },
+  "plugins": [
+    {
+      "name": "infra-aware-linux",
+      "source": "./",
+      "description": "Linux hardware, kernel, container, Kubernetes, and observability context for performance analysis.",
+      "version": "0.1.0"
+    }
+  ]
+}
